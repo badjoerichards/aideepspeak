@@ -1,0 +1,16 @@
+# Core requirements
+fastapi
+uvicorn
+python-dotenv
+dataclasses; python_version < "3.11.2"
+
+# AI Model SDKs
+openai>=1.0.0  # Updated to use new OpenAI API
+anthropic  # Anthropic's official Python client for Claude
+google-generativeai  # Google's Gemini AI SDK
+deepseek  # If DeepSeek has an official package
+requests  # For making HTTP requests to Ollama and other APIs
+
+# Optional but recommended
+python-jose[cryptography]  # For JWT handling if needed
+pydantic  # For data validation
