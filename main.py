@@ -18,7 +18,7 @@ from cache_manager import init_cache  # Import this first
 # Import other modules at the top level
 from conversation_flow import generate_setup_data
 from conversation_manager import ConversationManager
-from data_structures import SetupData, ManagerConfig
+from data_structures import SetupData, ManagerConfig, Character, WorldContext, MeetingSetup, Location, Event, SeatingArrangement, RoomSetup, PurposeAndContext, Goal, BriefingMaterials, Document, ProtocolReminder, OpeningMessage, Logkeeper
 from utils import write_json_to_file, get_timestamp
 from dataclasses import asdict
 
@@ -46,127 +46,131 @@ def cli_generate_setup():
     write_json_to_file(setup_dict, output_file)
     print(f"Generated {output_file}. Please review/modify as needed before running the conversation.")
 
-def cli_run_conversation(setup_path: str):
-    """
-    Loads setup.json, allows user to confirm or modify, then runs the conversation loop.
-    """
-    if not os.path.exists(setup_path):
-        print(f"Error: Setup file {setup_path} not found.")
-        return
-
-    # Load the setup data
-    with open(setup_path, "r", encoding="utf-8") as f:
-        setup_dict = json.load(f)
-
-    print("Current Setup Data (from JSON):")
-    print(json.dumps(setup_dict, indent=2, ensure_ascii=False))
-
-    confirmation = input("Would you like to edit this JSON? (y/n): ")
-    if confirmation.lower() == "y":
-        print("Edit the file externally, then press Enter when done.")
-        input()
-
-        # Reload
-        with open(setup_path, "r", encoding="utf-8") as f:
+def cli_run_conversation(setup_file: str):
+    """Run a conversation from a setup file"""
+    try:
+        # Load setup file
+        with open(setup_file, 'r') as f:
             setup_dict = json.load(f)
-
-    # Construct SetupData object from dict
-    # For brevity, we skip robust validation. In a real app, use Pydantic or similar.
-    from data_structures import Character, WorldContext, MeetingSetup, SetupData
-
-    characters = []
-    for cdata in setup_dict["characters"]:
-        characters.append(
-            Character(
-                name=cdata["name"],
-                position=cdata["position"],
-                role=cdata["role"],
-                hierarchy=cdata["hierarchy"],
-                assigned_model=cdata["assigned_model"]
-            )
+        
+        # Convert dictionary to SetupData object
+        characters = [Character(**c) for c in setup_dict["characters"]]
+        world_ctx = WorldContext(**setup_dict["world_or_simulation_context"])
+        
+        # Convert meeting setup nested objects
+        meeting_dict = setup_dict["meeting_setup"]
+        location = Location(**meeting_dict["location"])
+        events = [Event(**e) for e in meeting_dict["recent_events"]]
+        seating = [SeatingArrangement(**s) for s in meeting_dict["room_setup"]["seating_arrangement"]]
+        room_setup = RoomSetup(
+            description=meeting_dict["room_setup"]["description"],
+            seating_arrangement=seating
         )
-    wctx = setup_dict["world_or_simulation_context"]
-    world_ctx = WorldContext(
-        era=wctx["era"],
-        year=wctx["year"],
-        season=wctx["season"],
-        technological_level=wctx["technological_level"],
-        culture_and_society=wctx["culture_and_society"],
-        religions=wctx["religions"],
-        magic_and_myths=wctx["magic_and_myths"],
-        political_climate=wctx["political_climate"]
-    )
-    mset = setup_dict["meeting_setup"]
-    meeting_setup = MeetingSetup(
-        date=mset["date"],
-        time=mset["time"],
-        meeting_location=mset["meeting_location"],
-        meeting_location_description=mset["meeting_location_description"],
-        recent_events=mset["recent_events"],
-        summary_of_last_meetings=mset["summary_of_last_meetings"],
-        tags_keywords=mset["tags_keywords"],
-        category=mset["category"],
-        room_setup=mset["room_setup"],
-        purpose_and_context=mset["purpose_and_context"],
-        goal=mset["goal"],
-        briefing_materials=mset["briefing_materials"],
-        protocol_reminder=mset["protocol_reminder"],
-        customary_opening_message=mset["customary_opening_message"],
-        agenda_outline=mset["agenda_outline"]
-    )
-
-    setup_data = SetupData(
-        topic=setup_dict["topic"],
-        characters=characters,
-        world_or_simulation_context=world_ctx,
-        meeting_setup=meeting_setup
-    )
-
-    # Let user pick or randomly choose the manager model
-    manager_model = input("Enter a model name for the 'group chat manager' (leave blank for random): ")
-    if not manager_model:
-        import random
-        manager_model = random.choice(["openai-gpt", "claude", "gemini", "deepseek", "ollama"])
-
-    manager_config = ManagerConfig(manager_model=manager_model)
-
-    # Prepare a log file
-    timestamp = get_timestamp().replace(":", "").replace(" ", "_")
-    log_file_path = f"meeting_log_{timestamp}.json"
-
-    print(f"Conversation log will be saved to: {log_file_path}")
-
-    # Run the conversation
-    cm = ConversationManager(setup_data, manager_config, log_file_path)
-    cm.run_conversation()
-
-    print("\nConversation finished!")
-    print(f"Log is saved in {log_file_path}.")
-    print("Goodbye.")
+        purpose_ctx = PurposeAndContext(**meeting_dict["purpose_and_context"])
+        goal = Goal(objectives=meeting_dict["goal"]["objectives"])
+        docs = [Document(**d) for d in meeting_dict["briefing_materials"]["documents"]]
+        briefing = BriefingMaterials(documents=docs)
+        protocol = ProtocolReminder(**meeting_dict["protocol_reminder"])
+        opening = OpeningMessage(**meeting_dict["opening_message"])
+        
+        meeting_setup = MeetingSetup(
+            date=meeting_dict["date"],
+            time=meeting_dict["time"],
+            location=location,
+            recent_events=events,
+            summary_of_last_meetings=meeting_dict["summary_of_last_meetings"],
+            tags_keywords=meeting_dict.get("tags_keywords", ["<not_ready>"]),
+            category=meeting_dict.get("category", "<not_ready>"),
+            room_setup=room_setup,
+            purpose_and_context=purpose_ctx,
+            goal=goal,
+            briefing_materials=briefing,
+            protocol_reminder=protocol,
+            opening_message=opening,
+            agenda_outline=meeting_dict["agenda_outline"]
+        )
+        
+        # Create SetupData object
+        setup_data = SetupData(
+            id=setup_dict["id"],
+            version=setup_dict["version"],
+            name=setup_dict["name"],
+            topic=setup_dict["topic"],
+            logkeeper=Logkeeper(**setup_dict["logkeeper"]),
+            simulation_time=setup_dict["simulation_time"],
+            characters=characters,
+            world_or_simulation_context=world_ctx,
+            meeting_setup=meeting_setup
+        )
+        
+        # Get manager model with improved prompt
+        available_models = ["openai-gpt", "claude", "gemini", "deepseek", "ollama"]
+        model_prompt = (
+            "Enter a model name for the 'group chat manager'\n"
+            f"Available models: {', '.join(available_models)}\n"
+            "(leave blank for random): "
+        )
+        manager_model = input(model_prompt)
+        if not manager_model:
+            import random
+            manager_model = random.choice(available_models)
+        
+        # Create manager config
+        manager_config = ManagerConfig(manager_model=manager_model)
+        
+        # Create log file path
+        timestamp = get_timestamp().replace(":", "").replace(" ", "_")
+        log_file_path = f"meeting_log_{timestamp}.json"
+        print(f"\nConversation log will be saved to: {log_file_path}")
+        
+        # Initialize conversation manager
+        manager = ConversationManager(
+            setup_data=setup_data,
+            manager_config=manager_config,
+            log_file_path=log_file_path
+        )
+        
+        # Start conversation
+        print(f"\nStarting conversation with manager model: {manager_model}")
+        manager.run_conversation()
+        
+        print("\nConversation finished!")
+        print(f"Log saved to: {log_file_path}")
+        
+    except FileNotFoundError:
+        print(f"Error: Setup file '{setup_file}' not found")
+    except json.JSONDecodeError:
+        print(f"Error: Invalid JSON in setup file '{setup_file}'")
+    except Exception as e:
+        print(f"Error running conversation: {e}")
+        import traceback
+        traceback.print_exc()  # Print full error trace for debugging
 
 def main():
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="command")
+    # Initialize cache manager first
+    init_cache()
     
+    parser = argparse.ArgumentParser(description="AI Group Chat Simulator CLI")
+    subparsers = parser.add_subparsers(dest="command")
+
     # Generate setup command
-    setup_parser = subparsers.add_parser("generate_setup")
-    setup_parser.add_argument("--cache-seed", type=int, default=69,
-                            help="Seed for response caching (default: 69)")
+    generate_parser = subparsers.add_parser("generate_setup", help="Generate a new conversation setup")
+    
+    # Run conversation command
+    run_parser = subparsers.add_parser("run_conversation", help="Run a conversation from setup file")
+    run_parser.add_argument("setup_file", help="Path to the setup.json file")
     
     # Clear cache command
-    clear_cache_parser = subparsers.add_parser("clear-cache")
-    
+    clear_cache_parser = subparsers.add_parser("clear-cache", help="Clear the response cache")
+
     args = parser.parse_args()
-    
-    # Initialize cache manager before anything else
-    cache_seed = getattr(args, 'cache_seed', 69)
-    cache_manager = init_cache(cache_seed)
-    
+
     if args.command == "generate_setup":
         cli_generate_setup()
+    elif args.command == "run_conversation":
+        cli_run_conversation(args.setup_file)
     elif args.command == "clear-cache":
-        cache_manager.clear()
-        print("Cache cleared successfully")
+        cli_clear_cache()
     else:
         parser.print_help()
 

@@ -65,21 +65,34 @@ class CacheManager:
             json.dump(cache_data, f, indent=2)
     
     def _prune_expired(self) -> int:
-        """Remove expired entries from cache"""
+        """Remove expired entries and error responses from cache. Returns count of pruned entries."""
         cache_data = self._load_cache()
-        now = datetime.now().timestamp()
+        current_time = datetime.now().timestamp()
+        expired_count = 0
         
-        # Count expired entries
-        original_count = len(cache_data["entries"])
+        # Create new dict for valid entries
+        valid_entries = {}
         
-        # Filter out expired entries
-        cache_data["entries"] = {
-            k: v for k, v in cache_data["entries"].items()
-            if v["expires_at"] > now
-        }
+        for key, entry in cache_data["entries"].items():
+            # Check if entry is expired
+            is_expired = entry["expires_at"] <= current_time
+            
+            # Check if entry is an error response
+            response_text = entry["response"]
+            usage_info = entry["usage_info"]
+            is_error = (
+                (isinstance(response_text, str) and response_text.startswith("[") and "ERROR" in response_text) or
+                usage_info.get('error') is not None
+            )
+            
+            # Keep only valid, non-expired, non-error entries
+            if not is_expired and not is_error:
+                valid_entries[key] = entry
+            else:
+                expired_count += 1
         
-        expired_count = original_count - len(cache_data["entries"])
         if expired_count > 0:
+            cache_data["entries"] = valid_entries
             self._save_cache(cache_data)
             
         return expired_count

@@ -9,6 +9,7 @@ Updated to:
 
 import os
 from typing import List, Optional
+from dataclasses import asdict
 
 from data_structures import (
     SetupData,
@@ -162,26 +163,46 @@ class ConversationManager:
     def run_conversation(self):
         """
         Main loop. 
-        Starts with the customary opening message from meeting_setup,
+        Starts with the opening message from meeting_setup,
         then continues until end conditions are met.
         """
-        # Step 7: Start with the "customary_opening_message"
-        opening_speaker = "Meeting Chair"
-        opening_message = self.setup_data.meeting_setup.customary_opening_message
-        self.log_message(opening_speaker, opening_message, model_used="None")
-
+        # Start with the opening message
+        opening_message = self.setup_data.meeting_setup.opening_message
+        print(f"\n{opening_message.speaker}: {opening_message.message}")
+        
+        # Add opening message to conversation log
+        self.log_message(
+            sender=opening_message.speaker,
+            message=opening_message.message,
+            model_used="None"  # Opening message doesn't use an AI model
+        )
+        
         # Normal conversation loop
         while True:
-            # More advanced next-speaker logic: pass the entire conversation to manager model
             conversation_text = self._get_conversation_text()
             character_names = [c.name for c in self.setup_data.characters]
 
-            # Ask manager model to decide
+            # Convert setup_data to dict for JSON serialization
+            setup_dict = {
+                "id": self.setup_data.id,
+                "version": self.setup_data.version,
+                "name": self.setup_data.name,
+                "topic": self.setup_data.topic,
+                "logkeeper": asdict(self.setup_data.logkeeper),
+                "simulation_time": self.setup_data.simulation_time,
+                "characters": [asdict(c) for c in self.setup_data.characters],
+                "world_or_simulation_context": asdict(self.setup_data.world_or_simulation_context),
+                "meeting_setup": asdict(self.setup_data.meeting_setup)
+            }
+
+            # Pass setup_dict to decide_next_speaker
             next_speaker_name = decide_next_speaker(
                 manager_model=self.manager_config.manager_model,
                 conversation_so_far=conversation_text,
-                character_names=character_names
+                character_names=character_names,
+                setup_data=setup_dict
             )
+            
             # Fallback if needed
             character = next(
                 (c for c in self.setup_data.characters if c.name == next_speaker_name),

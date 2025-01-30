@@ -315,7 +315,7 @@ def generate_setup_data(topic: str) -> SetupData:
         },        
         {
             "event_description": "The Lannisters have been facing internal strife, weakening their hold on the throne.."
-        },        
+        }
     ],
 
     "summary_of_last_meetings": "Previous meetings focused on strategizing alliances and assessing military strengths.",
@@ -412,7 +412,7 @@ def generate_setup_data(topic: str) -> SetupData:
     {example_json}
 
 
-    Requirements: your response MUST be in JSON format, suitable for games and meeting session playback programs.
+    Requirements: your response MUST be in valid JSON format, suitable for games and meeting session playback programs.
     """
     
     meeting_setup_response, usage = call_ai_model("openai-gpt", meeting_setup_prompt)
