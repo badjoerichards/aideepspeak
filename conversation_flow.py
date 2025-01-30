@@ -242,9 +242,9 @@ def generate_setup_data(topic: str) -> SetupData:
 
     # Generate world context
     example_json = '''{
-  "world_context": {
+  "world_or_simulation_context": {
     "era": "Medieval Fantasy",
-    "year": 300 AC (After Conquest)",
+    "year": "300 AC (After Conquest)",
     "season": "Late Summer",
     "technological_level": "Medieval with elements of magic",
     "culture_and_society": "Feudal society with noble houses, knights, and smallfolk",
@@ -279,7 +279,7 @@ def generate_setup_data(topic: str) -> SetupData:
         total_ttfb += float(usage.get('ttfb_seconds', 0))
         cleaned_response = clean_json_response(world_context_response)
         ctx_data = json.loads(cleaned_response)
-        ctx = ctx_data["world_context"]
+        ctx = ctx_data["world_or_simulation_context"]
         
         world_ctx = WorldContext(
             era=ctx["era"],
@@ -338,7 +338,7 @@ def generate_setup_data(topic: str) -> SetupData:
     "goal": {
         "objectives": [
             "Develop a comprehensive strategy for reclaiming the throne.",
-            "Address and resolve any immediate threats to the realm.",
+            "Address and resolve any immediate threats to the realm."
         ]
     },
     

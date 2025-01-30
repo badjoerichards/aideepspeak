@@ -16,6 +16,12 @@ from dotenv import load_dotenv
 load_dotenv()
 print(f"Utils: Environment loaded, PROMPT_DEBUG = {os.getenv('PROMPT_DEBUG')}")
 
+# Add these color constants at the top of utils.py
+class Colors:
+    YELLOW = '\033[93m'
+    GREEN = '\033[92m'
+    RESET = '\033[0m'
+
 def get_timestamp() -> str:
     """Return current timestamp as a string."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -109,11 +115,7 @@ class DebugPromptManager:
     
     def prompt_user(self, prompt: str, response: Optional[Tuple[str, dict]] = None) -> str:
         """
-        Handles debug prompting. Returns:
-        - 'y' to proceed
-        - 'n' to exit
-        - 'r' to retry (only for response validation)
-        - 's' to skip debug for session
+        Handles debug prompting with colored output and model information.
         """
         should_show = self.should_debug()
         print(f"Prompt User Called - Should Show Debug: {should_show}")
@@ -122,20 +124,20 @@ class DebugPromptManager:
             return 'y'
         
         if response is None:
-            # Prompt validation
+            # Prompt validation - Yellow color
             print("\n=== DEBUG: AI Prompt ===")
-            print("Prompt Content:")
+            print(f"{Colors.YELLOW}Prompt Content (Sending to: {prompt.get('model', 'unknown')}):") 
             print("---------------")
-            print(prompt)
-            print("---------------")
+            print(f"{prompt['content']}")  # Assuming prompt is now a dict with 'content' and 'model'
+            print(f"---------------{Colors.RESET}")
             print("\nSend this prompt? [y]es/[n]o/[s]kip debug for session: ", end="", flush=True)
         else:
-            # Response validation
+            # Response validation - Green color
             print("\n=== DEBUG: AI Response ===")
-            print("Response Content:")
+            print(f"{Colors.GREEN}Response Content (From: {response[1].get('model', 'unknown')}):")
             print("---------------")
-            print(response[0])
-            print("---------------")
+            print(f"{response[0]}")
+            print(f"---------------{Colors.RESET}")
             ttfb = response[1].get('ttfb_seconds', 'N/A')
             print(f"Usage Info: {response[1]} (Time to first byte: {ttfb}s)")
             print("\nProceed with this response? [y]es/[n]o/[r]etry/[s]kip debug for session: ", end="", flush=True)
@@ -163,7 +165,17 @@ def debug_prompt(prompt: str) -> bool:
 
 def debug_response(prompt: str, response: Tuple[str, dict]) -> Tuple[bool, bool]:
     """Returns (proceed, retry)"""
-    choice = debug_manager.prompt_user(prompt, response)
+    response_text, usage_info = response
+    
+    # Check if this is a cached response
+    is_cached = usage_info.get('cached', False)  # We'll add this flag
+    model_name = "cache" if is_cached else usage_info.get('model', 'unknown')
+    
+    choice = debug_manager.prompt_user(prompt, (response_text, {
+        **usage_info,
+        'model': model_name
+    }))
+    
     if choice == 'n':
         print("Debug: Exiting program due to response rejection")
         exit(0)

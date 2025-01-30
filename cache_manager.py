@@ -6,7 +6,7 @@ import json
 import os
 import time
 import hashlib
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 from datetime import datetime, timedelta
 
 CACHE_DIR = "cache"
@@ -24,10 +24,16 @@ class CacheManager:
         if expired_count > 0:
             print(f"Pruned {expired_count} expired cache entries")
     
-    def _normalize_prompt(self, prompt: str) -> str:
-        """Normalize prompt text to ensure consistent hashing"""
-        # Remove extra whitespace and normalize line endings
-        return "\n".join(line.strip() for line in prompt.split("\n")).strip()
+    def _normalize_prompt(self, prompt: Union[str, Dict]) -> str:
+        """Normalize the prompt for consistent hashing"""
+        if isinstance(prompt, dict):
+            # If prompt is a dict, use the content field
+            prompt_str = prompt.get('content', '')
+        else:
+            # If prompt is already a string, use it directly
+            prompt_str = str(prompt)
+        
+        return "\n".join(line.strip() for line in prompt_str.split("\n")).strip()
     
     def _generate_hash(self, prompt: str, model_name: str) -> str:
         """Generate a unique hash for the prompt + model + seed combination"""
@@ -91,7 +97,8 @@ class CacheManager:
             if entry["expires_at"] > datetime.now().timestamp():
                 expires_in = datetime.fromtimestamp(entry["expires_at"]) - datetime.now()
                 print(f"Cache hit! Entry expires in {expires_in.days} days")
-                return entry["response"], entry["usage_info"]
+                usage_info = {**entry["usage_info"], 'cached': True}
+                return entry["response"], usage_info
             else:
                 print("Found expired cache entry, will make new API call")
         return None

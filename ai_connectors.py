@@ -6,7 +6,7 @@ while keeping placeholders for Claude, Gemini, DeepSeek, and Ollama.
 """
 
 import os
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Any
 from utils import debug_prompt, debug_response
 import time  # Add this import at the top
 from cache_manager import cache_manager, init_cache
@@ -137,12 +137,18 @@ def call_ollama(prompt: str) -> Tuple[str, Dict]:
     usage_info = {}
     return mock_text, usage_info
 
-def call_ai_model(model_name: str, prompt: str) -> Tuple[str, Dict]:
+def call_ai_model(model_name: str, prompt_content: str) -> Tuple[str, Dict[str, Any]]:
     """
     Generic function to call different AI models based on model_name.
     Returns (response_text, usage_info)
     """
     validate_api_keys(model_name)
+    
+    # Create prompt dict with content and model info
+    prompt = {
+        'content': prompt_content,
+        'model': model_name
+    }
     
     # Always show prompt debug first
     print(f"\nSending prompt to {model_name} API...")
@@ -155,7 +161,7 @@ def call_ai_model(model_name: str, prompt: str) -> Tuple[str, Dict]:
     from cache_manager import cache_manager
     if cache_manager is not None:
         print(f"\nChecking cache for {model_name} response...")
-        cached = cache_manager.get(prompt, model_name)
+        cached = cache_manager.get(prompt_content, model_name)  # Use prompt_content for cache
         if cached:
             response_text, usage_info = cached
             print(f"✓ Found cached response from {model_name}")
@@ -163,10 +169,9 @@ def call_ai_model(model_name: str, prompt: str) -> Tuple[str, Dict]:
             # Show debug for cached response
             proceed, retry = debug_response(prompt, (response_text, usage_info))
             if retry:
-                # Delete cached response and make new API call
-                cache_manager.delete(prompt, model_name)
+                cache_manager.delete(prompt_content, model_name)  # Use prompt_content for cache
                 print("Cleared cached response for retry")
-                return call_ai_model(model_name, prompt)
+                return call_ai_model(model_name, prompt_content)
             elif not proceed:
                 print("User rejected cached response")
                 sys.exit(0)
@@ -178,15 +183,15 @@ def call_ai_model(model_name: str, prompt: str) -> Tuple[str, Dict]:
     print("Making API call...")
     # Make the API call based on model
     if model_name == "openai-gpt":
-        response = call_openai_gpt(prompt)
+        response = call_openai_gpt(prompt_content)
     elif model_name == "claude":
-        response = call_claude(prompt)
+        response = call_claude(prompt_content)
     elif model_name == "gemini":
-        response = call_gemini(prompt)
+        response = call_gemini(prompt_content)
     elif model_name == "deepseek":
-        response = call_deepseek(prompt)
+        response = call_deepseek(prompt_content)
     elif model_name == "ollama":
-        response = call_ollama(prompt)
+        response = call_ollama(prompt_content)
     else:
         raise ValueError(f"Unknown model: {model_name}")
     
@@ -195,7 +200,7 @@ def call_ai_model(model_name: str, prompt: str) -> Tuple[str, Dict]:
     # Cache the new response
     if cache_manager:
         print(f"\nCaching response with hash: {cache_manager._generate_hash(prompt, model_name)[:8]}...")
-        cache_manager.set(prompt, model_name, response_text, usage_info)
+        cache_manager.set(prompt_content, model_name, response_text, usage_info)
         print("Response cached successfully")
     
     # Debug the new response
@@ -203,14 +208,17 @@ def call_ai_model(model_name: str, prompt: str) -> Tuple[str, Dict]:
     if retry:
         # Delete cached response and retry
         if cache_manager:
-            cache_manager.delete(prompt, model_name)
+            cache_manager.delete(prompt_content, model_name)
             print("Cleared cached response for retry")
-        return call_ai_model(model_name, prompt)
+        return call_ai_model(model_name, prompt_content)
     elif not proceed:
         print("User rejected response")
         sys.exit(0)
     
-    return response
+    # Include model in usage info
+    usage_info['model'] = model_name
+    
+    return response_text, usage_info
 
 def decide_next_speaker(
     manager_model: str,
