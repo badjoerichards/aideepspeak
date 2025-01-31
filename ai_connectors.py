@@ -434,14 +434,15 @@ def decide_next_speaker(
     Calls the 'manager_model' to decide who should speak next.
     Now includes the full setup data for better context.
     """
-
-    example_json = '''{
-  "next_speaker": {
-    "name": "The Next Speaker",
-    "reason": "Most logical and entertaining choice"
-    }
-
-}'''   
+    # Filter out SystemCheck messages
+    conversation_lines = conversation_so_far.split('\n')
+    filtered_lines = [
+        line for line in conversation_lines 
+        if not line.startswith("SystemCheck:") and 
+        not "[Goal Check]" in line and 
+        not "[Closing Check]" in line
+    ]
+    filtered_conversation = '\n'.join(filtered_lines)
 
     prompt = (
         "You are the 'group chat manager', also the 'logkeeper' of the meeting.\n"
@@ -453,12 +454,11 @@ def decide_next_speaker(
         
         "Here is the conversation so far:\n"
         "----------------------\n"
-        f"{conversation_so_far}\n"
+        f"{filtered_conversation}\n"
         "----------------------\n"
         f"Available characters: {character_names}\n"
         f"For the most entertaining and logical outcome, \n"
         "which single character should speak next? Return just the name of the character (no explanation)"
-
     )
 
     response_text, _usage = call_ai_model(manager_model, prompt)

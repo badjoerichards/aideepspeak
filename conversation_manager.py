@@ -8,6 +8,7 @@ Updated to:
 """
 
 import os
+import json
 from typing import List, Optional
 from dataclasses import asdict
 
@@ -99,26 +100,33 @@ class ConversationManager:
             self.total_usage[k] += v
 
     def check_end_conditions(self) -> bool:
-        """
-        Check if conversation should end:
-         - If total_word_count > max_words
-         - If approximate reading time > max_read_minutes
-         - If an AI call determines goal is reached
-        """
-        read_minutes = approximate_reading_time_in_minutes(self.total_word_count)
-        if self.total_word_count >= self.max_words or read_minutes >= self.max_read_minutes:
-            return True
-
-        # Additionally, ask an AI if the goal/purpose is met.
-        # We pass in some details plus the conversation so far.
+        """Check if the conversation should end"""
+        # Get and filter conversation text
         conversation_text = self._get_conversation_text()
+        conversation_lines = conversation_text.split('\n')
+        filtered_lines = [
+            line for line in conversation_lines 
+            if not line.startswith("SystemCheck:") and 
+            not "[Goal Check]" in line and 
+            not "[Closing Check]" in line
+        ]
+        filtered_conversation = '\n'.join(filtered_lines)
+
+        # Create the prompt with filtered conversation
         prompt = (
-            f"Conversation so far:\n{conversation_text}\n\n"
-            f"Meeting goal: {self.setup_data.meeting_setup.goal}\n\n"
-            "Have we met the goal or purpose? Reply YES or NO."
+            "Based on the conversation, have we achieved our meeting goals?\n"
+            "Consider:\n"
+            "1. Have all key points been discussed?\n"
+            "2. Has a clear decision or conclusion been reached?\n"
+            "3. Have all participants contributed meaningfully?\n\n"
+            f"Meeting goals: {self.setup_data.meeting_setup.goal.objectives}\n\n"
+            f"Conversation so far:\n{filtered_conversation}\n\n"
+            "Answer YES or NO only."
         )
+
         response_text, usage = call_ai_model(self.manager_config.manager_model, prompt)
-        # Log the manager's analysis as well (optional, but might be helpful).
+        
+        # Log the check
         self.log_message(
             sender="SystemCheck",
             message=f"[Goal Check] {response_text}",
@@ -126,22 +134,30 @@ class ConversationManager:
             usage_info=usage
         )
 
-        if "YES" in response_text.upper():
-            return True
-
-        return False
+        return "YES" in response_text.upper()
 
     def determine_closing_message(self) -> Optional[str]:
         """
         If a closing message is required, we ask the manager model.
         Returns the name of the character or None if no closing message is needed.
         """
+        # Get and filter conversation text
         conversation_text = self._get_conversation_text()
+        conversation_lines = conversation_text.split('\n')
+        filtered_lines = [
+            line for line in conversation_lines 
+            if not line.startswith("SystemCheck:") and 
+            not "[Goal Check]" in line and 
+            not "[Closing Check]" in line
+        ]
+        filtered_conversation = '\n'.join(filtered_lines)
+
         prompt = (
             "Based on the conversation, do we need a final closing message to wrap up?\n"
             "If yes, provide the EXACT name of who should speak. If no, just say 'NO'.\n\n"
-            f"Conversation so far:\n{conversation_text}\n"
+            f"Conversation so far:\n{filtered_conversation}\n"
         )
+        
         response_text, usage = call_ai_model(self.manager_config.manager_model, prompt)
         self.log_message(
             sender="SystemCheck",
@@ -179,7 +195,17 @@ class ConversationManager:
         
         # Normal conversation loop
         while True:
+            # Get full conversation text and filter out system messages
             conversation_text = self._get_conversation_text()
+            conversation_lines = conversation_text.split('\n')
+            filtered_lines = [
+                line for line in conversation_lines 
+                if not line.startswith("SystemCheck:") and 
+                not "[Goal Check]" in line and 
+                not "[Closing Check]" in line
+            ]
+            filtered_conversation = '\n'.join(filtered_lines)
+
             character_names = [c.name for c in self.setup_data.characters]
 
             # Convert setup_data to dict for JSON serialization
@@ -195,35 +221,65 @@ class ConversationManager:
                 "meeting_setup": asdict(self.setup_data.meeting_setup)
             }
 
-            # Pass setup_dict to decide_next_speaker
+            # First decide who speaks next
             next_speaker_name = decide_next_speaker(
                 manager_model=self.manager_config.manager_model,
-                conversation_so_far=conversation_text,
+                conversation_so_far=filtered_conversation,
                 character_names=character_names,
                 setup_data=setup_dict
             )
-            
-            # Fallback if needed
+
+            # Convert setup_data to JSON for the prompt
+            setup_json = json.dumps(setup_dict, indent=2)
+
+            # Get last message and sender
+            last_message = ""
+            last_message_sender = "None"
+            if self.conversation_log.messages:
+                # Filter out SystemCheck messages and get the last real message
+                real_messages = [
+                    msg for msg in self.conversation_log.messages 
+                    if msg.sender != "SystemCheck"
+                ]
+                if real_messages:
+                    last_msg = real_messages[-1]
+                    last_message = last_msg.message
+                    last_message_sender = last_msg.sender
+
             character = next(
                 (c for c in self.setup_data.characters if c.name == next_speaker_name),
                 self.setup_data.characters[0]
             )
 
-            # Provide the context to that character
-            last_message = (
-                self.conversation_log.messages[-1].message if self.conversation_log.messages else ""
-            )
+            example_json = '''
+    "message": {
+      "speaker": "Khaleesi",
+      "message": "Esteemed members of the council..."
+    }
+            '''
 
             character_prompt = (
                 f"You are {character.name}, a {character.position}.\n"
-                f"Role: {character.role}.\n\n"
-                f"Meeting context: {self.setup_data.meeting_setup.purpose_and_context}.\n"
-                f"Recent events: {self.setup_data.meeting_setup.recent_events}.\n"
-                f"Last message: {last_message}\n\n"
-                "Please respond in-character."
+                "This is the meeting setup data in JSON format:\n"
+                "----------------------\n"
+                f"{setup_json}\n"  # Pretty print the setup data
+                "----------------------\n"
+                "Here is the conversation so far:\n"
+                "----------------------\n"
+                f"{filtered_conversation}\n"  # Use filtered conversation instead
+                "----------------------\n"
+                f"Last message from {last_message_sender}: {last_message}\n\n"
+                "Please respond in-character to achieve the meeting goal and objectives, keep your response concise and to the point, like a movie dialogue. Respond with just your message."
             )
 
             reply_text, usage = call_ai_model(character.assigned_model, character_prompt)
+            
+            # Clean the response text - remove surrounding quotes if present
+            reply_text = reply_text.strip()
+            if reply_text.startswith('"') and reply_text.endswith('"'):
+                reply_text = reply_text[1:-1].strip()
+            
+            # Log the cleaned message
             self.log_message(character.name, reply_text, model_used=character.assigned_model, usage_info=usage)
 
             # Check if the meeting ends
