@@ -49,6 +49,42 @@ class ConversationManager:
         # Additional: track total token usage or cost
         self.total_usage = {}
 
+        # Add conversation time tracking
+        self.current_conversation_time = 0  # in milliseconds
+
+    def calculate_message_duration(self, message: str) -> int:
+        """
+        Calculate how long a message would take to say in milliseconds.
+        Uses a rough approximation:
+        - Base time per word (300ms)
+        - Extra time for punctuation pauses
+        - Random variation for natural feel
+        """
+        import random
+        
+        # Base calculation
+        words = message.split()
+        word_count = len(words)
+        base_duration = word_count * 300  # 300ms per word
+        
+        # Add time for punctuation pauses
+        punctuation_pauses = message.count('.') * 500  # 500ms pause for periods
+        punctuation_pauses += message.count(',') * 200  # 200ms pause for commas
+        
+        # Add random variation (±15%)
+        variation = random.uniform(0.85, 1.15)
+        
+        # Calculate total duration
+        duration = int((base_duration + punctuation_pauses) * variation)
+        
+        # Ensure minimum duration
+        return max(1000, duration)  # At least 1 second
+        
+    def calculate_speaker_pause(self) -> int:
+        """Calculate natural pause between speakers"""
+        import random
+        return random.randint(500, 2000)  # 0.5 to 2 seconds
+
     def log_message(
         self, sender: str, message: str, model_used: Optional[str] = None, usage_info: Optional[dict] = None
     ):
@@ -57,8 +93,26 @@ class ConversationManager:
         We also keep track of usage tokens if provided.
         """
         timestamp = get_timestamp()
+        
+        # Only advance conversation time for non-system messages
+        if not sender.startswith("SystemCheck"):
+            # Add pause if this isn't the first message
+            if self.conversation_log.messages:
+                self.current_conversation_time += self.calculate_speaker_pause()
+            
+            # Add message duration
+            message_duration = self.calculate_message_duration(message)
+            
+            conversation_time = self.current_conversation_time
+            self.current_conversation_time += message_duration
+        else:
+            conversation_time = None  # SystemCheck messages don't advance time
+
         msg_log = MessageLog(
-            timestamp=timestamp, sender=sender, message=message, model_used=model_used
+            timestamp=timestamp,
+            sender=sender,
+            message=message,
+            model_used=model_used
         )
         self.conversation_log.messages.append(msg_log)
 
@@ -68,6 +122,7 @@ class ConversationManager:
             "sender": sender,
             "message": message,
             "model_used": model_used or "",
+            "conversation_time": conversation_time  # Add conversation time to log
         }
 
         # If usage info is present, we store it
@@ -112,15 +167,35 @@ class ConversationManager:
         ]
         filtered_conversation = '\n'.join(filtered_lines)
 
+        # Convert setup_data to dict for JSON serialization
+        setup_dict = {
+            "id": self.setup_data.id,
+            "version": self.setup_data.version,
+            "name": self.setup_data.name,
+            "topic": self.setup_data.topic,
+            "logkeeper": asdict(self.setup_data.logkeeper),
+            "simulation_time": self.setup_data.simulation_time,
+            "characters": [asdict(c) for c in self.setup_data.characters],
+            "world_or_simulation_context": asdict(self.setup_data.world_or_simulation_context),
+            "meeting_setup": asdict(self.setup_data.meeting_setup)
+        }
+
+        # Convert to JSON
+        setup_json = json.dumps(setup_dict, indent=2)
+
         # Create the prompt with filtered conversation
         prompt = (
+            "This is the meeting setup data in JSON format:\n"
+            "----------------------\n"
+            f"{setup_json}\n"  # Pretty print the setup data
+            "----------------------\n"
+            f"Conversation so far:\n{filtered_conversation}\n\n"
+            "----------------------\n"
             "Based on the conversation, have we achieved our meeting goals?\n"
             "Consider:\n"
             "1. Have all key points been discussed?\n"
             "2. Has a clear decision or conclusion been reached?\n"
             "3. Have all participants contributed meaningfully?\n\n"
-            f"Meeting goals: {self.setup_data.meeting_setup.goal.objectives}\n\n"
-            f"Conversation so far:\n{filtered_conversation}\n\n"
             "Answer YES or NO only."
         )
 
@@ -156,6 +231,7 @@ class ConversationManager:
             "Based on the conversation, do we need a final closing message to wrap up?\n"
             "If yes, provide the EXACT name of who should speak. If no, just say 'NO'.\n\n"
             f"Conversation so far:\n{filtered_conversation}\n"
+            "If yes, reply just the EXACT name of who should speak. If no, just say 'NO'.\n\n"
         )
         
         response_text, usage = call_ai_model(self.manager_config.manager_model, prompt)
@@ -259,7 +335,6 @@ class ConversationManager:
             '''
 
             character_prompt = (
-                f"You are {character.name}, a {character.position}.\n"
                 "This is the meeting setup data in JSON format:\n"
                 "----------------------\n"
                 f"{setup_json}\n"  # Pretty print the setup data
@@ -268,8 +343,9 @@ class ConversationManager:
                 "----------------------\n"
                 f"{filtered_conversation}\n"  # Use filtered conversation instead
                 "----------------------\n"
-                f"Last message from {last_message_sender}: {last_message}\n\n"
-                "Please respond in-character to achieve the meeting goal and objectives, keep your response concise and to the point, like a movie dialogue. Respond with just your message."
+                #f"Last message from {last_message_sender}: {last_message}\n\n"
+                f"You are {character.name}, a {character.position}.\n"
+                "Please respond in-character. Keep your response concise and to the point, like a movie dialogue. Do not start your response with YOUR NAME:, no actions or descriptions, just respond with your message."
             )
 
             reply_text, usage = call_ai_model(character.assigned_model, character_prompt)

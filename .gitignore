@@ -44,3 +44,5 @@ setup.json
 cache/
 ai_responses_cache.json
 targetsetup.json
+/extras
+finaloutput.json

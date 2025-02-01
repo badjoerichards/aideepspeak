@@ -29,6 +29,14 @@ Be warned, this is work in progress.
 - Customizable character roles and hierarchies
 - Flexible meeting contexts and scenarios
 
+
+## What can this be used for?
+
+- Real-world profession and meeting simulation
+- AI-powered role-playing games
+- Storytelling
+- You are the artist, be creative. You set up the meeting, then let it run.
+
 ## Installation
 
 1. Clone the repository:
