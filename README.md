@@ -37,6 +37,8 @@ Be warned, this is work in progress.
 - Storytelling
 - You are the artist, be creative. You set up the meeting, then let it run.
 
+It is as entertaining as it is a productive tool - and it all depends on how you use it. The most entertaining outcome could be the most likely.
+
 ## Installation
 
 1. Clone the repository:
