@@ -1,4 +1,4 @@
-# AI Conversations/Meetings/Group Chat Simulator (v0.1 DeepSpeak)
+# AI Conversations/Meetings/Group Chat Simulator (v0.1 DeepSpeak Alpha)
 
 ## Creator's Note
 
