@@ -1,5 +1,8 @@
 # AI Conversations/Meetings/Group Chat Simulator (v0.1 DeepSpeak Alpha)
 
+![image](https://github.com/user-attachments/assets/2ea0b64e-f931-4a1f-ba83-5d14d05a2f4e)
+
+
 ## Creator's Note
 
 I believe that conversation and dialogue are the best ways for any entity — human or AI — to learn.
@@ -300,6 +303,6 @@ Apache 2.0 is business-friendly, meaning you can use it in closed-source project
 ## Acknowledgments
 
 - Thanks to the various AI model providers
-- AGENT1 collectors and holders, fans and friends who support my work.
+- AGENT1 collectors and holders (https://agent1.xyz/story), fans and friends who support my work.
 - Contributors and CREEBank.org
 - Open source community
