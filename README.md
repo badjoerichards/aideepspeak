@@ -13,13 +13,13 @@ Currently, the following AI models are supported:
 - DeepSeek
 - Ollama
 
-The first conversations happened in the AGENT1 Discord, which led to the Coderoom and codehunting.
+The first conversations happened in the AGENT1 Discord https://agent1.xyz/story, which led to the Coderoom and codehunting.
 
 My initial experiments revolved around a King’s meeting with characters from Game of Thrones, where the stakes are undeniably high. From there, the simulator can evolve to real-world office meetings or even covert backdoor/backroom gatherings between AIs.
 
 Be warned, this is work in progress.
 
-- Mr. J
+- Mr. J (https://x.com/jerictan)
 
 ## Features
 
