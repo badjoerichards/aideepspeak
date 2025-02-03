@@ -1,10 +1,10 @@
-# AI Conversations/Meetings/Group Chat Simulation
+# AI Conversations/Meetings/Group Chat Simulator (v0.1 DeepSpeak)
 
 ## Creator's Note
 
 I believe that conversation and dialogue are the best ways for any entity — human or AI — to learn.
 
-This project is an attempt to create a sophisticated AI-powered group chat simulator that can create and manage multi-character conversations using various AI models. The system supports both CLI and API interfaces for generating conversation setups and running interactive discussions.
+This project is an attempt to create a sophisticated AI-powered group chat simulator that can create and manage multi-character conversations using various AI models. The system supports both CLI (most users) and API (developers) interfaces for generating conversation setups and running interactive discussions.
 
 Currently, the following AI models are supported:
 - OpenAI GPT
@@ -12,6 +12,8 @@ Currently, the following AI models are supported:
 - Google Gemini
 - DeepSeek
 - Ollama
+
+The first conversations happened in the AGENT1 Discord, which led to the Coderoom and codehunting.
 
 My initial experiments revolved around a King’s meeting with characters from Game of Thrones, where the stakes are undeniably high. From there, the simulator can evolve to real-world office meetings or even covert backdoor/backroom gatherings between AIs.
 
@@ -29,15 +31,19 @@ Be warned, this is work in progress.
 - Customizable character roles and hierarchies
 - Flexible meeting contexts and scenarios
 
+There is information overload in this README so anyone can build on it without me.
+
 
 ## What can this be used for?
 
-- Real-world profession and meeting simulation
-- AI-powered role-playing games
+- Real-world professional meeting for various disciplines and simulations
+- AI-powered role-playing games, or parts of them
 - Storytelling
-- You are the artist, be creative. You set up the meeting, then let it run.
+- You are the artist, be creative. Set up the meeting, and let it run.
 
-It is as entertaining as it is a productive tool - and it all depends on how you use it. The most entertaining outcome could be the most likely.
+It is as entertaining as it is a productive tool - all depends on how you use it. The most entertaining outcome could be the most likely.
+
+It generates a realistic and professional meeting conversation based on the most human historical context, with the best AI models available. What you do with it is entirely up to you.
 
 ## Installation
 
@@ -115,6 +121,8 @@ Note: Keep your .env file secure and never commit it to version control.
 
 ### CLI Interface (main.py)
 
+Most users will use this to run locally and test with.
+
 The CLI supports two main operations:
 
 1. Generate a setup configuration:
@@ -147,6 +155,8 @@ This will:
 - Save the conversation log to a timestamped JSON file
 
 ### FastAPI Interface (fastapi_app.py)
+
+Most developers and advanced users will use this to integrate into their own projects.
 
 1. Start the API server:
 ```bash
@@ -269,10 +279,27 @@ conda update -n base -c defaults conda
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
+
+✅ You Can:
+
+Use, modify, distribute, and sell the software.
+Use the software for personal, commercial, or open-source projects.
+License modifications and derivatives under a different license.
+
+🚫 You Must:
+
+Include the original license and copyright notice in distributions.
+State any modifications you've made.
+Not sue for patent claims if you're using the software.
+⚠️ No Warranty:
+
+The software is provided "as-is" with no guarantees.
+Apache 2.0 is business-friendly, meaning you can use it in closed-source projects while keeping modifications private if you don’t distribute them.
 
 ## Acknowledgments
 
 - Thanks to the various AI model providers
-- Contributors and testers
+- AGENT1 collectors and holders, fans and friends who support my work.
+- Contributors and CREEBank.org
 - Open source community
