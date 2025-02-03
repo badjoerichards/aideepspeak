@@ -19,7 +19,7 @@ My initial experiments revolved around a King’s meeting with characters from G
 
 Be warned, this is work in progress.
 
-- Mr. J (https://x.com/jerictan)
+- Mr. J
 
 ## Features
 
