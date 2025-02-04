@@ -22,11 +22,15 @@ from data_structures import SetupData, ManagerConfig, Character, WorldContext, M
 from utils import write_json_to_file, get_timestamp
 from dataclasses import asdict
 
-def cli_generate_setup():
+def cli_generate_setup(provided_prompt=None):
     """
     Asks the user for the meeting topic, then generates setup.json.
     """
-    topic = input("What would you like the group conversation or meeting to be about? ")
+    # Use provided prompt if available, otherwise ask user
+    if provided_prompt:
+        topic = provided_prompt
+    else:
+        topic = input("What would you like the group conversation or meeting to be about? ")
     print(f"Debug: Received topic: {topic}")
     data = generate_setup_data(topic)
     
@@ -153,8 +157,9 @@ def main():
     parser = argparse.ArgumentParser(description="AI Group Chat Simulator CLI")
     subparsers = parser.add_subparsers(dest="command")
 
-    # Generate setup command
+    # Generate setup command - add optional prompt parameter
     generate_parser = subparsers.add_parser("generate_setup", help="Generate a new conversation setup")
+    generate_parser.add_argument("prompt", nargs='?', help="Optional meeting prompt. If not provided, will prompt for input")
     
     # Run conversation command
     run_parser = subparsers.add_parser("run_conversation", help="Run a conversation from setup file")
@@ -166,7 +171,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "generate_setup":
-        cli_generate_setup()
+        cli_generate_setup(args.prompt)  # Pass the prompt to the function
     elif args.command == "run_conversation":
         cli_run_conversation(args.setup_file)
     elif args.command == "clear-cache":
