@@ -33,24 +33,57 @@ from cache_manager import cache_manager  # Only import the instance, not init_ca
 def clean_json_response(response_text: str) -> str:
     """Clean the response text to get valid JSON"""
     try:
-        # Remove markdown code block markers if present
+        # Remove markdown code blocks if present
         if "```json" in response_text:
             response_text = response_text.split("```json")[1]
         if "```" in response_text:
             response_text = response_text.split("```")[0]
-            
+        
         # Remove any JSON comments (lines with //)
         cleaned_lines = []
         for line in response_text.split('\n'):
-            if '//' not in line:  # Fixed: proper line iteration
+            if '//' not in line:
                 cleaned_lines.append(line)
         response_text = '\n'.join(cleaned_lines)
         
-        # Remove any trailing commas before closing braces/brackets
+        # First try to parse as-is
+        try:
+            json.loads(response_text)
+            return response_text
+        except json.JSONDecodeError:
+            # If that fails, try to clean up common issues
+            pass
+        
+        # Remove trailing commas in arrays and objects
         response_text = response_text.replace(',]', ']')
         response_text = response_text.replace(',}', '}')
         
+        # Handle line-by-line cleaning
+        lines = response_text.split('\n')
+        cleaned_lines = []
+        for i, line in enumerate(lines):
+            # Skip empty lines
+            if not line.strip():
+                continue
+                
+            # Check next line for closing brackets
+            next_line = lines[i+1].strip() if i+1 < len(lines) else ''
+            if (',' in line) and ('}' in next_line or ']' in next_line):
+                line = line.rstrip().rstrip(',')
+            
+            cleaned_lines.append(line)
+        
+        response_text = '\n'.join(cleaned_lines)
+        
+        # Verify the cleaned JSON is valid
+        try:
+            json.loads(response_text)
+        except json.JSONDecodeError as e:
+            print(f"Warning: Failed to clean JSON: {e}")
+            print("Original response:", response_text)
+        
         return response_text.strip()
+        
     except Exception as e:
         print(f"Error cleaning JSON response: {e}")
         return response_text
@@ -60,26 +93,28 @@ def parse_meeting_setup_response(response_text: str) -> MeetingSetup:
     try:
         cleaned_response = clean_json_response(response_text)
         data = json.loads(cleaned_response)
-        setup = data["meeting_setup"]
+        
+        # Extract meeting_setup from root if needed
+        setup_data = data.get('meeting_setup', data)
         
         # Parse location
-        location = setup.get("location", {})
+        location = setup_data.get('location', {})
         location_obj = Location(
-            name=location.get("name", "<not_ready>"),
-            coordinates=location.get("coordinates", "<not_ready>"),
-            latitude=float(location.get("latitude", 0.0)),
-            longitude=float(location.get("longitude", 0.0)),
-            description=location.get("description", "<not_ready>")
+            name=location.get('name', ''),
+            coordinates=location.get('coordinates', ''),
+            latitude=float(location.get('latitude', 0.0)),
+            longitude=float(location.get('longitude', 0.0)),
+            description=location.get('description', '')
         )
         
         # Parse recent events
-        events = setup.get("recent_events", [])
+        events = setup_data.get("recent_events", [])
         if not isinstance(events, list):
             events = [{"event_description": events}]
         event_objs = [Event(event_description=e.get("event_description", "<not_ready>")) for e in events]
         
         # Parse room setup
-        room_setup = setup.get("room_setup", {})
+        room_setup = setup_data.get("room_setup", {})
         seating = [
             SeatingArrangement(
                 position=s.get("position", 0),
@@ -93,18 +128,18 @@ def parse_meeting_setup_response(response_text: str) -> MeetingSetup:
         )
         
         # Parse purpose and context
-        purpose_ctx = setup.get("purpose_and_context", {})
+        purpose_ctx = setup_data.get("purpose_and_context", {})
         purpose_ctx_obj = PurposeAndContext(
             purpose=purpose_ctx.get("purpose", "<not_ready>"),
             context=purpose_ctx.get("context", "<not_ready>")
         )
         
         # Parse goal
-        goal = setup.get("goal", {})
+        goal = setup_data.get("goal", {})
         goal_obj = Goal(objectives=goal.get("objectives", ["<not_ready>"]))
         
         # Parse briefing materials
-        briefing = setup.get("briefing_materials", {})
+        briefing = setup_data.get("briefing_materials", {})
         docs = [
             Document(
                 title=d.get("title", "<not_ready>"),
@@ -114,30 +149,30 @@ def parse_meeting_setup_response(response_text: str) -> MeetingSetup:
         briefing_obj = BriefingMaterials(documents=docs)
         
         # Parse protocol reminder
-        protocol = setup.get("protocol_reminder", {})
+        protocol = setup_data.get("protocol_reminder", {})
         protocol_obj = ProtocolReminder(
             speaking_order=protocol.get("speaking_order", ["<not_ready>"]),
             customs=protocol.get("customs", ["<not_ready>"])
         )
         
         # Parse opening message
-        opening = setup.get("opening_message", {})
+        opening = setup_data.get("opening_message", {})
         opening_obj = OpeningMessage(
             speaker=opening.get("speaker", "<not_ready>"),
             message=opening.get("message", "<not_ready>")
         )
         
         # Parse agenda outline
-        agenda = setup.get("agenda_outline", {"1": "<not_ready>"})
+        agenda = setup_data.get("agenda_outline", {"1": "<not_ready>"})
         
         return MeetingSetup(
-            date=setup.get("date", "<not_ready>"),
-            time=setup.get("time", "<not_ready>"),
+            date=setup_data.get("date", "<not_ready>"),
+            time=setup_data.get("time", "<not_ready>"),
             location=location_obj,
             recent_events=event_objs,
-            summary_of_last_meetings=setup.get("summary_of_last_meetings", "<not_ready>"),
-            tags_keywords=setup.get("tags_keywords", ["<not_ready>"]),
-            category=setup.get("category", "<not_ready>"),
+            summary_of_last_meetings=setup_data.get("summary_of_last_meetings", "<not_ready>"),
+            tags_keywords=setup_data.get("tags_keywords", ["<not_ready>"]),
+            category=setup_data.get("category", "<not_ready>"),
             room_setup=room_setup_obj,
             purpose_and_context=purpose_ctx_obj,
             goal=goal_obj,
@@ -148,7 +183,36 @@ def parse_meeting_setup_response(response_text: str) -> MeetingSetup:
         )
     except Exception as e:
         print(f"Error parsing meeting setup: {e}")
-        print(f"Failed field access. Response was: {response_text}")
+        print("Response was:", response_text)
+        return None
+
+def parse_world_context_response(response_text: str) -> WorldContext:
+    """Parse the JSON response from AI into WorldContext object"""
+    try:
+        cleaned_response = clean_json_response(response_text)
+        data = json.loads(cleaned_response)
+        
+        # Extract world_context from root if needed
+        context_data = data.get('world_or_simulation_context', data)
+        
+        # Ensure religions is a list
+        religions = context_data.get('religions', [])
+        if isinstance(religions, str):
+            religions = [religions]
+        
+        return WorldContext(
+            era=context_data.get('era', ''),
+            year=context_data.get('year', ''),
+            season=context_data.get('season', ''),
+            technological_level=context_data.get('technological_level', ''),
+            culture_and_society=context_data.get('culture_and_society', ''),
+            religions=religions,
+            magic_and_myths=context_data.get('magic_and_myths', ''),
+            political_climate=context_data.get('political_climate', '')
+        )
+    except Exception as e:
+        print(f"Error parsing world context: {e}")
+        print("Response was:", response_text)
         return None
 
 def generate_setup_data(topic: str) -> SetupData:
@@ -214,7 +278,7 @@ def generate_setup_data(topic: str) -> SetupData:
     Example:
     {example_json}
 
-    Requirements: your response MUST be in JSON format
+    Requirements: your response MUST be in valid JSON format
     """
     
     print("\nCalling AI for characters...")  # Add debug print
@@ -270,7 +334,7 @@ def generate_setup_data(topic: str) -> SetupData:
     Example:
     {example_json}
 
-    Requirements: your response MUST be in JSON format
+    Requirements: your response MUST be in valid JSON format
     """
     
     # Generate world context with error handling
@@ -405,14 +469,11 @@ def generate_setup_data(topic: str) -> SetupData:
     - Protocol, speaking order and customs
     - Opening message and its speaker
     - Agenda outline (briefly outline the order of discussions)
-    
-    
-    Format as a clear list of these meeting elements.
-    Example:
+        
+    Format as a clear list of these meeting elements and respond as a valid JSON object, example:
     {example_json}
 
-
-    Requirements: your response MUST be in valid JSON format, suitable for games and meeting session playback programs.
+    Requirements: your response MUST be in valid JSON format.
     """
     
     meeting_setup_response, usage = call_ai_model("openai-gpt", meeting_setup_prompt)

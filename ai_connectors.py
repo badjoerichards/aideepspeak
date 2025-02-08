@@ -458,7 +458,7 @@ def decide_next_speaker(
         "----------------------\n"
         f"Available characters: {character_names}\n"
         f"For the most entertaining and logical outcome, \n"
-        "which single character should speak next? Return just the name of the character (no explanation)"
+        "which single character from the list of Available characters should speak next? Return just the name of the character (no explanation)"
     )
 
     response_text, _usage = call_ai_model(manager_model, prompt)

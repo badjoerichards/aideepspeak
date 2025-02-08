@@ -370,8 +370,16 @@ class ConversationManager:
                 self.setup_data.characters[0]
             )
             closing_prompt = (
-                f"You are {closer_character.name}. "
-                "Please provide a final closing message for this meeting."
+                "This is the meeting setup data in JSON format:\n"
+                "----------------------\n"
+                f"{setup_json}\n"  # Pretty print the setup data
+                "----------------------\n"
+                "Here is the conversation so far:\n"
+                "----------------------\n"
+                f"{filtered_conversation}\n"  # Use filtered conversation instead
+                "----------------------\n"          
+                f"You are {closer_character.name}, a {closer_character.position}.\n"
+                "Please respond in-character, provide a final closing message for this meeting like a movie dialogue. Do not start your response with YOUR NAME:, no actions or descriptions, just respond with your message."
             )
             closing_text, usage = call_ai_model(closer_character.assigned_model, closing_prompt)
             self.log_message(
