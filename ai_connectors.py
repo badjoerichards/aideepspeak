@@ -12,6 +12,7 @@ import time  # Add this import at the top
 from cache_manager import cache_manager, init_cache
 import sys
 import json
+from api_timeout import call_with_timeout  # Add this import
 
 # Try importing required packages with helpful error messages
 try:
@@ -376,20 +377,32 @@ def call_ai_model(model_name: str, prompt_content: str) -> Tuple[str, Dict[str, 
         print("✗ Cache manager not available - responses won't be cached")
     
     print("Making API call...")
-    # Make the API call based on model
-    if model_name == "openai-gpt":
-        response = call_openai_gpt(prompt_content)
-    elif model_name == "claude":
-        response = call_claude(prompt_content)
-    elif model_name == "gemini":
-        response = call_gemini(prompt_content)
-    elif model_name == "deepseek":
-        response = call_deepseek(prompt_content)
-    elif model_name == "ollama":
-        response = call_ollama(prompt_content)
-    else:
-        raise ValueError(f"Unknown model: {model_name}")
+    # Get timeout from env
+    api_timeout = int(os.getenv("API_CALL_TIMEOUT", "33"))
     
+    try:
+        # Make the API call with timeout
+        if model_name == "openai-gpt":
+            response = call_with_timeout(call_openai_gpt, prompt_content, 
+                                      timeout=api_timeout, model_name=model_name)
+        elif model_name == "claude":
+            response = call_with_timeout(call_claude, prompt_content,
+                                      timeout=api_timeout, model_name=model_name)
+        elif model_name == "gemini":
+            response = call_with_timeout(call_gemini, prompt_content,
+                                      timeout=api_timeout, model_name=model_name)
+        elif model_name == "deepseek":
+            response = call_with_timeout(call_deepseek, prompt_content,
+                                      timeout=api_timeout, model_name=model_name)
+        elif model_name == "ollama":
+            response = call_with_timeout(call_ollama, prompt_content,
+                                      timeout=api_timeout, model_name=model_name)
+        else:
+            raise ValueError(f"Unknown model: {model_name}")
+            
+    except TimeoutError as e:
+        return f"[ERROR]: {str(e)}", {"error": str(e)}
+        
     response_text, usage_info = response
     
     # Add model name to usage info
@@ -406,7 +419,7 @@ def call_ai_model(model_name: str, prompt_content: str) -> Tuple[str, Dict[str, 
     if cache_manager and not is_error:
         print(f"\nCaching response with hash: {cache_manager._generate_hash(prompt, model_name)[:8]}...")
         cache_manager.set(prompt_content, model_name, response_text, usage_info)
-        print("Response cached successfully")
+        #print("Response cached successfully")
     elif is_error:
         print("\nNot caching error response")
     

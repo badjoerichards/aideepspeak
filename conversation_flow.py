@@ -39,50 +39,46 @@ def clean_json_response(response_text: str) -> str:
         if "```" in response_text:
             response_text = response_text.split("```")[0]
         
-        # Remove any JSON comments (lines with //)
-        cleaned_lines = []
-        for line in response_text.split('\n'):
-            if '//' not in line:
-                cleaned_lines.append(line)
-        response_text = '\n'.join(cleaned_lines)
-        
         # First try to parse as-is
         try:
             json.loads(response_text)
             return response_text
         except json.JSONDecodeError:
-            # If that fails, try to clean up common issues
             pass
+            
+        # Clean up whitespace and newlines
+        lines = [line.strip() for line in response_text.split('\n')]
+        lines = [line for line in lines if line]  # Remove empty lines
         
-        # Remove trailing commas in arrays and objects
-        response_text = response_text.replace(',]', ']')
-        response_text = response_text.replace(',}', '}')
-        
-        # Handle line-by-line cleaning
-        lines = response_text.split('\n')
+        # Remove trailing commas
         cleaned_lines = []
         for i, line in enumerate(lines):
             # Skip empty lines
-            if not line.strip():
+            if not line:
                 continue
                 
-            # Check next line for closing brackets
+            # Check if this line ends with a comma and next line starts a closing bracket
             next_line = lines[i+1].strip() if i+1 < len(lines) else ''
-            if (',' in line) and ('}' in next_line or ']' in next_line):
-                line = line.rstrip().rstrip(',')
-            
+            if line.endswith(',') and (next_line.startswith('}') or next_line.startswith(']')):
+                line = line.rstrip(',')
             cleaned_lines.append(line)
         
-        response_text = '\n'.join(cleaned_lines)
+        # Join back together
+        cleaned_text = '\n'.join(cleaned_lines)
+        
+        # Remove any remaining problematic commas
+        cleaned_text = cleaned_text.replace(',}', '}')
+        cleaned_text = cleaned_text.replace(',]', ']')
         
         # Verify the cleaned JSON is valid
         try:
-            json.loads(response_text)
+            json.loads(cleaned_text)
         except json.JSONDecodeError as e:
             print(f"Warning: Failed to clean JSON: {e}")
             print("Original response:", response_text)
-        
-        return response_text.strip()
+            print("Cleaned response:", cleaned_text)
+            
+        return cleaned_text
         
     except Exception as e:
         print(f"Error cleaning JSON response: {e}")
@@ -91,96 +87,47 @@ def clean_json_response(response_text: str) -> str:
 def parse_meeting_setup_response(response_text: str) -> MeetingSetup:
     """Parse the JSON response from AI into MeetingSetup object"""
     try:
+        # Clean the response first
         cleaned_response = clean_json_response(response_text)
+        
+        # Parse the cleaned JSON
         data = json.loads(cleaned_response)
         
         # Extract meeting_setup from root if needed
         setup_data = data.get('meeting_setup', data)
         
-        # Parse location
-        location = setup_data.get('location', {})
-        location_obj = Location(
-            name=location.get('name', ''),
-            coordinates=location.get('coordinates', ''),
-            latitude=float(location.get('latitude', 0.0)),
-            longitude=float(location.get('longitude', 0.0)),
-            description=location.get('description', '')
-        )
-        
-        # Parse recent events
-        events = setup_data.get("recent_events", [])
-        if not isinstance(events, list):
-            events = [{"event_description": events}]
-        event_objs = [Event(event_description=e.get("event_description", "<not_ready>")) for e in events]
-        
-        # Parse room setup
-        room_setup = setup_data.get("room_setup", {})
-        seating = [
-            SeatingArrangement(
-                position=s.get("position", 0),
-                name=s.get("name", "<not_ready>"),
-                role=s.get("role", "<not_ready>")
-            ) for s in room_setup.get("seating_arrangement", [])
-        ]
-        room_setup_obj = RoomSetup(
-            description=room_setup.get("description", "<not_ready>"),
+        # Parse nested objects
+        location = Location(**setup_data["location"])
+        events = [Event(**e) for e in setup_data["recent_events"]]
+        seating = [SeatingArrangement(**s) for s in setup_data["room_setup"]["seating_arrangement"]]
+        room_setup = RoomSetup(
+            description=setup_data["room_setup"]["description"],
             seating_arrangement=seating
         )
-        
-        # Parse purpose and context
-        purpose_ctx = setup_data.get("purpose_and_context", {})
-        purpose_ctx_obj = PurposeAndContext(
-            purpose=purpose_ctx.get("purpose", "<not_ready>"),
-            context=purpose_ctx.get("context", "<not_ready>")
-        )
-        
-        # Parse goal
-        goal = setup_data.get("goal", {})
-        goal_obj = Goal(objectives=goal.get("objectives", ["<not_ready>"]))
-        
-        # Parse briefing materials
-        briefing = setup_data.get("briefing_materials", {})
-        docs = [
-            Document(
-                title=d.get("title", "<not_ready>"),
-                description=d.get("description", "<not_ready>")
-            ) for d in briefing.get("documents", [])
-        ]
-        briefing_obj = BriefingMaterials(documents=docs)
-        
-        # Parse protocol reminder
-        protocol = setup_data.get("protocol_reminder", {})
-        protocol_obj = ProtocolReminder(
-            speaking_order=protocol.get("speaking_order", ["<not_ready>"]),
-            customs=protocol.get("customs", ["<not_ready>"])
-        )
-        
-        # Parse opening message
-        opening = setup_data.get("opening_message", {})
-        opening_obj = OpeningMessage(
-            speaker=opening.get("speaker", "<not_ready>"),
-            message=opening.get("message", "<not_ready>")
-        )
-        
-        # Parse agenda outline
-        agenda = setup_data.get("agenda_outline", {"1": "<not_ready>"})
+        purpose_ctx = PurposeAndContext(**setup_data["purpose_and_context"])
+        goal = Goal(objectives=setup_data["goal"]["objectives"])
+        docs = [Document(**d) for d in setup_data["briefing_materials"]["documents"]]
+        briefing = BriefingMaterials(documents=docs)
+        protocol = ProtocolReminder(**setup_data["protocol_reminder"])
+        opening = OpeningMessage(**setup_data["opening_message"])
         
         return MeetingSetup(
-            date=setup_data.get("date", "<not_ready>"),
-            time=setup_data.get("time", "<not_ready>"),
-            location=location_obj,
-            recent_events=event_objs,
-            summary_of_last_meetings=setup_data.get("summary_of_last_meetings", "<not_ready>"),
+            date=setup_data["date"],
+            time=setup_data["time"],
+            location=location,
+            recent_events=events,
+            summary_of_last_meetings=setup_data["summary_of_last_meetings"],
             tags_keywords=setup_data.get("tags_keywords", ["<not_ready>"]),
             category=setup_data.get("category", "<not_ready>"),
-            room_setup=room_setup_obj,
-            purpose_and_context=purpose_ctx_obj,
-            goal=goal_obj,
-            briefing_materials=briefing_obj,
-            protocol_reminder=protocol_obj,
-            opening_message=opening_obj,
-            agenda_outline=agenda
+            room_setup=room_setup,
+            purpose_and_context=purpose_ctx,
+            goal=goal,
+            briefing_materials=briefing,
+            protocol_reminder=protocol,
+            opening_message=opening,
+            agenda_outline=setup_data["agenda_outline"]
         )
+        
     except Exception as e:
         print(f"Error parsing meeting setup: {e}")
         print("Response was:", response_text)

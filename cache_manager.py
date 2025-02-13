@@ -102,8 +102,8 @@ class CacheManager:
         cache_data = self._load_cache()
         prompt_hash = self._generate_hash(prompt, model_name)
         
-        print(f"Looking for hash {prompt_hash[:8]}... in cache")
-        print(f"Available cache entries: {list(cache_data['entries'].keys())[:8]}")
+        #print(f"Looking for hash {prompt_hash[:8]}... in cache")
+        #print(f"Available cache entries: {list(cache_data['entries'].keys())[:8]}")
         
         if prompt_hash in cache_data["entries"]:
             entry = cache_data["entries"][prompt_hash]
@@ -135,7 +135,7 @@ class CacheManager:
             }
             
             # Debug print before saving
-            print(f"Cache data to write: {json.dumps(cache_data, indent=2)[:200]}...")
+            #print(f"Cache data to write: {json.dumps(cache_data, indent=2)[:200]}...")
             
             # Ensure directory exists
             os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)

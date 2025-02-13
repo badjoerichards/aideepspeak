@@ -252,6 +252,18 @@ class ConversationManager:
             return None
         return chosen_speaker
 
+    def clean_closing_text(self, text: str) -> str:
+        """Clean up closing text by removing quotes"""
+        # Remove leading/trailing whitespace
+        text = text.strip()
+        
+        # Remove opening/closing quotes if present
+        if (text.startswith('"') and text.endswith('"')) or \
+           (text.startswith("'") and text.endswith("'")):
+            text = text[1:-1]
+        
+        return text.strip()
+
     def run_conversation(self):
         """
         Main loop. 
@@ -369,6 +381,9 @@ class ConversationManager:
                 (c for c in self.setup_data.characters if c.name == closer_name),
                 self.setup_data.characters[0]
             )
+            print(
+                f"\nGenerating closing message from {closer_character.name}..."
+            )
             closing_prompt = (
                 "This is the meeting setup data in JSON format:\n"
                 "----------------------\n"
@@ -382,6 +397,10 @@ class ConversationManager:
                 "Please respond in-character, provide a final closing message for this meeting like a movie dialogue. Do not start your response with YOUR NAME:, no actions or descriptions, just respond with your message."
             )
             closing_text, usage = call_ai_model(closer_character.assigned_model, closing_prompt)
+            
+            # Clean up closing text
+            closing_text = self.clean_closing_text(closing_text)
+            
             self.log_message(
                 closer_character.name,
                 closing_text,
