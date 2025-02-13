@@ -331,6 +331,21 @@ def call_ollama(prompt: str) -> Tuple[str, Dict]:
             "ttfb_seconds": 0
         }
 
+def _make_api_call(model_name: str, prompt_content: str) -> Tuple[str, Dict[str, Any]]:
+    """Make the actual API call based on model"""
+    if model_name == "openai-gpt":
+        return call_openai_gpt(prompt_content)
+    elif model_name == "claude":
+        return call_claude(prompt_content)
+    elif model_name == "gemini":
+        return call_gemini(prompt_content)
+    elif model_name == "deepseek":
+        return call_deepseek(prompt_content)
+    elif model_name == "ollama":
+        return call_ollama(prompt_content)
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
+
 def call_ai_model(model_name: str, prompt_content: str) -> Tuple[str, Dict[str, Any]]:
     """
     Generic function to call different AI models based on model_name.
@@ -338,104 +353,102 @@ def call_ai_model(model_name: str, prompt_content: str) -> Tuple[str, Dict[str, 
     """
     validate_api_keys(model_name)
     
-    # Create prompt dict with content and model info
-    prompt = {
-        'content': prompt_content,
-        'model': model_name
-    }
+    # Get retry config from env
+    max_retries = int(os.getenv("AUTOMATIC_RETRY_ON_ERROR", "0"))
+    RETRY_DELAY = 3  # seconds between retries
+    retry_count = 0
     
-    # Always show prompt debug first
-    print(f"\nSending prompt to {model_name} API...")
-    proceed = debug_prompt(prompt)
-    if not proceed:
-        print("User chose not to proceed with prompt")
-        sys.exit(0)
-    
-    # Check cache after prompt is approved
-    from cache_manager import cache_manager
-    if cache_manager is not None:
-        print(f"\nChecking cache for {model_name} response...")
-        cached = cache_manager.get(prompt_content, model_name)  # Use prompt_content for cache
-        if cached:
-            response_text, usage_info = cached
-            # Add model name to cached response
-            usage_info['model'] = model_name
-            print(f"✓ Found cached response from {model_name}")
-            print(f"Usage Info (cached): {usage_info}")
-            # Show debug for cached response
-            proceed, retry = debug_response(prompt, (response_text, usage_info))
-            if retry:
-                cache_manager.delete(prompt_content, model_name)  # Use prompt_content for cache
-                print("Cleared cached response for retry")
-                return call_ai_model(model_name, prompt_content)
-            elif not proceed:
-                print("User rejected cached response")
-                sys.exit(0)
-            return response_text, usage_info
-        print("✗ No cached response found")
-    else:
-        print("✗ Cache manager not available - responses won't be cached")
-    
-    print("Making API call...")
-    # Get timeout from env
-    api_timeout = int(os.getenv("API_CALL_TIMEOUT", "33"))
-    
-    try:
-        # Make the API call with timeout
-        if model_name == "openai-gpt":
-            response = call_with_timeout(call_openai_gpt, prompt_content, 
-                                      timeout=api_timeout, model_name=model_name)
-        elif model_name == "claude":
-            response = call_with_timeout(call_claude, prompt_content,
-                                      timeout=api_timeout, model_name=model_name)
-        elif model_name == "gemini":
-            response = call_with_timeout(call_gemini, prompt_content,
-                                      timeout=api_timeout, model_name=model_name)
-        elif model_name == "deepseek":
-            response = call_with_timeout(call_deepseek, prompt_content,
-                                      timeout=api_timeout, model_name=model_name)
-        elif model_name == "ollama":
-            response = call_with_timeout(call_ollama, prompt_content,
-                                      timeout=api_timeout, model_name=model_name)
-        else:
-            raise ValueError(f"Unknown model: {model_name}")
+    while True:
+        try:
+            # Create prompt dict with content and model info
+            prompt = {
+                'content': prompt_content,
+                'model': model_name
+            }
             
-    except TimeoutError as e:
-        return f"[ERROR]: {str(e)}", {"error": str(e)}
-        
-    response_text, usage_info = response
-    
-    # Add model name to usage info
-    usage_info['model'] = model_name
-    
-    # Only cache successful responses (no error messages)
-    is_error = (
-        response_text.startswith("[") and  # Error responses start with [model ERROR]
-        "ERROR" in response_text or
-        usage_info.get('error') is not None
-    )
-    
-    # Cache the new response only if it's not an error
-    if cache_manager and not is_error:
-        print(f"\nCaching response with hash: {cache_manager._generate_hash(prompt, model_name)[:8]}...")
-        cache_manager.set(prompt_content, model_name, response_text, usage_info)
-        #print("Response cached successfully")
-    elif is_error:
-        print("\nNot caching error response")
-    
-    # Debug the new response
-    proceed, retry = debug_response(prompt, (response_text, usage_info))
-    if retry:
-        # Delete cached response and retry
-        if cache_manager:
-            cache_manager.delete(prompt_content, model_name)
-            print("Cleared cached response for retry")
-        return call_ai_model(model_name, prompt_content)
-    elif not proceed:
-        print("User rejected response")
-        sys.exit(0)
-    
-    return response_text, usage_info
+            # Always show prompt debug first
+            print(f"\nSending prompt to {model_name} API...")
+            proceed = debug_prompt(prompt)
+            if not proceed:
+                print("User chose not to proceed with prompt")
+                sys.exit(0)
+            
+            # Check cache after prompt is approved
+            if cache_manager is not None:
+                print(f"\nChecking cache for {model_name} response...")
+                cached = cache_manager.get(prompt_content, model_name)
+                if cached:
+                    response_text, usage_info = cached
+                    usage_info['model'] = model_name
+                    print(f"✓ Found cached response from {model_name}")
+                    print(f"Usage Info (cached): {usage_info}")
+                    proceed, retry = debug_response(prompt, (response_text, usage_info))
+                    if retry:
+                        cache_manager.delete(prompt_content, model_name)
+                        print("Cleared cached response for retry")
+                        return call_ai_model(model_name, prompt_content)
+                    elif not proceed:
+                        print("User rejected cached response")
+                        sys.exit(0)
+                    return response_text, usage_info
+                print("✗ No cached response found")
+            
+            print(f"Making API call to {model_name}...")
+            # Get timeout from env
+            api_timeout = int(os.getenv("API_CALL_TIMEOUT", "33"))
+            
+            try:
+                # Make the API call with timeout
+                response_text, usage_info = call_with_timeout(
+                    _make_api_call,
+                    model_name, 
+                    prompt_content,
+                    timeout=api_timeout,
+                    model_name=model_name
+                )
+                
+                # Check for API errors
+                if "[ERROR]" in response_text or usage_info.get('error'):
+                    if retry_count < max_retries:
+                        retry_count += 1
+                        print(f"\nError from {model_name}. Waiting {RETRY_DELAY}s before retry...")
+                        print(f"Retrying... (Attempt {retry_count} of {max_retries})")
+                        time.sleep(RETRY_DELAY)
+                        continue
+                    else:
+                        print(f"\nFATAL ERROR: {model_name} failed after {max_retries} retry attempts")
+                        print("Error details:", response_text)
+                        sys.exit(1)
+                
+                # Success - cache and return
+                if cache_manager:
+                    cache_manager.set(prompt_content, model_name, response_text, usage_info)
+                
+                return response_text, usage_info
+                
+            except TimeoutError:
+                if retry_count < max_retries:
+                    retry_count += 1
+                    print(f"\nTimeout from {model_name}. Waiting {RETRY_DELAY}s before retry...")
+                    print(f"Retrying... (Attempt {retry_count} of {max_retries})")
+                    time.sleep(RETRY_DELAY)
+                    continue
+                else:
+                    print(f"\nFATAL ERROR: {model_name} timed out after {max_retries} retry attempts")
+                    sys.exit(1)
+                    
+        except Exception as e:
+            if retry_count < max_retries:
+                retry_count += 1
+                print(f"\nUnexpected error from {model_name}: {str(e)}")
+                print(f"Waiting {RETRY_DELAY}s before retry...")
+                print(f"Retrying... (Attempt {retry_count} of {max_retries})")
+                time.sleep(RETRY_DELAY)
+                continue
+            else:
+                print(f"\nFATAL ERROR: {model_name} failed after {max_retries} retry attempts")
+                print(f"Error details: {str(e)}")
+                sys.exit(1)
 
 def decide_next_speaker(
     manager_model: str,

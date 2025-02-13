@@ -100,26 +100,29 @@ def get_conversation_stats(conversation_id: str) -> Dict[str, Any]:
 
 class DebugPromptManager:
     def __init__(self):
-        debug_env = os.getenv("PROMPT_DEBUG", "false")
-        print(f"Raw PROMPT_DEBUG value: {debug_env}")  # Debug print
+        # Load both debug settings
+        debug_env = os.getenv("PROMPT_DEBUG", "false").lower()
+        show_only_env = os.getenv("DEBUG_SHOW_PROMPTS_AND_RESPONSES", "false").lower()
         
-        # More explicit string to bool conversion
-        self.debug_enabled = isinstance(debug_env, str) and debug_env.lower() in ['true', '1', 'yes', 'on']
-        print(f"Debug Manager Initialized - Debug Enabled: {self.debug_enabled}")
+        # Convert to boolean
+        self.debug_enabled = debug_env in ['true', '1', 'yes', 'on']
+        self.show_only = show_only_env in ['true', '1', 'yes', 'on']
+        
+        print(f"Debug Manager Initialized - Interactive Debug: {self.debug_enabled}, Show Only: {self.show_only}")
         self.skip_debug = False
     
     def should_debug(self) -> bool:
-        debug_status = self.debug_enabled and not self.skip_debug
-        print(f"Debug Status Check: enabled={self.debug_enabled}, skip={self.skip_debug}, final={debug_status}")
-        return debug_status
+        return (self.debug_enabled or self.show_only) and not self.skip_debug
+    
+    def should_prompt(self) -> bool:
+        """Determine if we should prompt the user for input"""
+        return self.debug_enabled and not self.skip_debug and not self.show_only
     
     def prompt_user(self, prompt: str, response: Optional[Tuple[str, dict]] = None) -> str:
         """
         Handles debug prompting with colored output and model information.
         """
         should_show = self.should_debug()
-        print(f"Prompt User Called - Should Show Debug: {should_show}")
-        
         if not should_show:
             return 'y'
         
@@ -128,9 +131,19 @@ class DebugPromptManager:
             print("\n=== DEBUG: AI Prompt ===")
             print(f"{Colors.YELLOW}Prompt Content (Sending to: {prompt.get('model', 'unknown')}):") 
             print("---------------")
-            print(f"{prompt['content']}")  # Assuming prompt is now a dict with 'content' and 'model'
+            print(f"{prompt['content']}")
             print(f"---------------{Colors.RESET}")
-            print("\nSend this prompt? [y]es/[n]o/[s]kip debug for session: ", end="", flush=True)
+            
+            # Only ask for input if interactive debug is enabled
+            if self.should_prompt():
+                print("\nSend this prompt? [y]es/[n]o/[s]kip debug for session: ", end="", flush=True)
+                choice = input().lower()
+                if choice == 's':
+                    self.skip_debug = True
+                    return 'y'
+                return choice
+            return 'y'  # Auto-continue if show-only mode
+            
         else:
             # Response validation - Green color
             print("\n=== DEBUG: AI Response ===")
@@ -140,16 +153,16 @@ class DebugPromptManager:
             print(f"---------------{Colors.RESET}")
             ttfb = response[1].get('ttfb_seconds', 'N/A')
             print(f"Usage Info: {response[1]} (Time to first byte: {ttfb}s)")
-            print("\nProceed with this response? [y]es/[n]o/[r]etry/[s]kip debug for session: ", end="", flush=True)
-        
-        choice = input().lower()
-        print(f"User chose: {choice}")
-        
-        if choice == 's':
-            self.skip_debug = True
-            return 'y'
-        
-        return choice
+            
+            # Only ask for input if interactive debug is enabled
+            if self.should_prompt():
+                print("\nProceed with this response? [y]es/[n]o/[r]etry/[s]kip debug for session: ", end="", flush=True)
+                choice = input().lower()
+                if choice == 's':
+                    self.skip_debug = True
+                    return 'y'
+                return choice
+            return 'y'  # Auto-continue if show-only mode
 
 # Global debug manager instance
 debug_manager = DebugPromptManager()

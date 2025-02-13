@@ -357,7 +357,7 @@ class ConversationManager:
                 "----------------------\n"
                 #f"Last message from {last_message_sender}: {last_message}\n\n"
                 f"You are {character.name}, a {character.position}.\n"
-                "Please respond in-character. Keep your response concise and to the point, like a movie dialogue. Do not start your response with YOUR NAME:, no actions or descriptions, just respond with your message."
+                "Please respond in-character. DO NOT REPEAT WHAT YOU HAVE SAID. Keep your response concise and to the point, like a movie dialogue. Do not start your response with YOUR NAME:, no actions or descriptions, just respond with your message."
             )
 
             reply_text, usage = call_ai_model(character.assigned_model, character_prompt)
